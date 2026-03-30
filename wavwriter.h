@@ -8,12 +8,12 @@
 // SAMPLE TYPES
 enum SampleTypes {
     // Signed integers
-    S8, S16, S24, S32, S64,
+    S16, S24, S32, S64,
 
     // Unsigned integers
-    U8, U16, U24, U32, U64,
+    U8,
 
-    // Floating point
+    // Floating point (Values must be between -1.0 and 1.0)
     F32, F64
 };
 
@@ -24,10 +24,10 @@ typedef struct wav_file_t wav_file_t;
 // SAMPLE
 typedef union {
     // Unsigned integers
-    uint8_t u8; uint16_t u16; uint32_t u24; uint32_t u32; uint64_t u64;
+    uint8_t u8;
 
     // Signed integers
-    int8_t i8; int16_t i16; int32_t s24; int32_t i32; int64_t i64;
+    int16_t i16; int32_t i24; int32_t i32; int64_t i64;
 
     // Floating point
     float f32; double f64;
@@ -69,6 +69,23 @@ Args:
  - n_samples        : Total number of samples for all channels in the array
 */
 void wavwriter_write_samples(
+    wav_file_t* wav_handle, wav_sample_t* samples, int n_samples
+);
+
+/*
+Write a set of audio samples to the file
+The samples should be given as floats between -1.0 and 1.0
+The function will convert the float samples to the given output sample format
+
+Args:
+ - wav_handle       : Pointer to the WAV file handle
+ - samples          : Array of float samples to be written into the file
+                      If the number of channels is larger than 1, the samples
+                      must be present in an interleaved form in the array
+                        e. g. for Stereo: LRLRLR...
+ - n_samples        : Total number of samples for all channels in the array
+*/
+void wavwriter_write_samples_from_float(
     wav_file_t* wav_handle, wav_sample_t* samples, int n_samples
 );
 
