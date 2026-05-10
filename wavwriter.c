@@ -4,8 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define INT24_MAX 8388607
-
 /*-----------------------------------------------------------------*/
 
 typedef struct {
@@ -37,11 +35,7 @@ struct wav_file_t {
 /*-----------------------------------------------------------------*/
 
 bool _system_is_little_endian () {
-    union endianness_test {
-        uint16_t u16;
-        uint8_t u8;
-    };
-    union endianness_test sample;
+    wav_sample_t sample;
     sample.u16 = 0x1122;
 
     if ( sample.u8 == 0x22 ) {
@@ -79,10 +73,10 @@ int wavwriter_open (
     (*wav_handle)->sample_format = sample_format;
 
 
-    memcpy( (*wav_handle)->wav_header.riff, "RIFF", 4 );
-    memcpy( (*wav_handle)->wav_header.wave, "WAVE", 4 );
-    memcpy( (*wav_handle)->wav_header.fmt,  "fmt ", 4 );
-    memcpy( (*wav_handle)->wav_header.data_header, "data", 4 );
+    memcpy( (*wav_handle)->wav_header.riff,         "RIFF", 4 );
+    memcpy( (*wav_handle)->wav_header.wave,         "WAVE", 4 );
+    memcpy( (*wav_handle)->wav_header.fmt,          "fmt ", 4 );
+    memcpy( (*wav_handle)->wav_header.data_header,  "data", 4 );
 
     (*wav_handle)->wav_header.fmt_header_len = 16;
 
@@ -96,20 +90,26 @@ int wavwriter_open (
     (*wav_handle)->wav_header.channels = channels;
     (*wav_handle)->wav_header.sample_rate = sample_rate;
 
-    if ( sample_format == U8 ) {
-        (*wav_handle)->wav_header.bits_per_sample = 8;
-    }
-    else if ( sample_format == S16 ) {
-        (*wav_handle)->wav_header.bits_per_sample = 16;
-    }
-    else if ( sample_format == S24 ) {
-        (*wav_handle)->wav_header.bits_per_sample = 24;
-    }
-    else if ( sample_format == S32 || sample_format == F32 ) {
-        (*wav_handle)->wav_header.bits_per_sample = 32;
-    }
-    else if ( sample_format == S64 || sample_format == F64 ) {
-        (*wav_handle)->wav_header.bits_per_sample = 64;
+    switch( sample_format ) {
+        case S8: case U8:
+            (*wav_handle)->wav_header.bits_per_sample =  8;
+            break;
+
+        case S16: case U16:
+            (*wav_handle)->wav_header.bits_per_sample = 16;
+            break;
+
+        case S24: case U24:
+            (*wav_handle)->wav_header.bits_per_sample = 24;
+            break;
+
+        case S32: case U32 case: F32:
+            (*wav_handle)->wav_header.bits_per_sample = 32;
+            break;
+
+        case S64: case U64: case F64:
+            (*wav_handle)->wav_header.bits_per_sample = 64;
+            break;
     }
 
     (*wav_handle)->wav_header.block_align =
@@ -128,6 +128,12 @@ int wavwriter_open (
 void wavwriter_write_samples( wav_file_t* wav_handle, wav_sample_t* samples, int n_samples ) {
     wav_sample_t sample;
     switch ( wav_handle->sample_format ) {
+        case S8:
+            for ( int i = 0; i < n_samples; i++ ) {
+                sample = samples[i];
+                fwrite( &sample, 1, 1, wav_handle->wav_file );
+            }
+            break;
         case S16:
             for ( int i = 0; i < n_samples; i++ ) {
                 sample = samples[i];
@@ -171,6 +177,41 @@ void wavwriter_write_samples( wav_file_t* wav_handle, wav_sample_t* samples, int
                 fwrite( &sample, 1, 1, wav_handle->wav_file );
             }
             break;
+        case U16:
+            for ( int i = 0; i < n_samples; i++ ) {
+                sample = samples[i];
+                if ( !wav_handle->little_endian ) {
+                    _switch_endianness( &sample, 2 );
+                }
+                fwrite( &sample, 1, 2, wav_handle->wav_file );
+            }
+            break;
+        case U24:
+            for ( int i = 0; i < n_samples; i++ ) {
+                sample = samples[i];
+                if ( !wav_handle->little_endian ) {
+                    _switch_endianness( &sample, 3 );
+                }
+                fwrite( &sample, 1, 3, wav_handle->wav_file );
+            }
+            break;
+        case U32:
+            for ( int i = 0; i < n_samples; i++ ) {
+                sample = samples[i];
+                if ( !wav_handle->little_endian ) {
+                    _switch_endianness( &sample, 4 );
+                }
+                fwrite( &sample, 1, 4, wav_handle->wav_file );
+            }
+            break;
+        case U64:
+            for ( int i = 0; i < n_samples; i++ ) {
+                sample = samples[i];
+                if ( !wav_handle->little_endian ) {
+                    _switch_endianness( &sample, 8 );
+                }
+                fwrite( &sample, 1, 8, wav_handle->wav_file );
+            }
 
         case F32:
             for ( int i = 0; i < n_samples; i++ ) {
@@ -195,79 +236,6 @@ void wavwriter_write_samples( wav_file_t* wav_handle, wav_sample_t* samples, int
     wav_handle->n_samples_written += n_samples;
 } /* wav_write_samples() */
 
-/*-----------------------------------------------------------------*/
-
-void wavwriter_write_samples_from_float(
-    wav_file_t* wav_handle, wav_sample_t* samples, int n_samples
-) {
-    wav_sample_t sample;
-    switch ( wav_handle->sample_format ) {
-        case S16:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.i16 = (int16_t)( samples[i].f32 * INT16_MAX );
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 2 );
-                }
-                fwrite( &sample, 1, 2, wav_handle->wav_file );
-            }
-            break;
-        case S24:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.i24 = (int32_t)( samples[i].f32 * INT24_MAX );
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 3 );
-                }
-                fwrite( &sample, 1, 3, wav_handle->wav_file );
-            }
-            break;
-        case S32:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.i32 = (int32_t)( samples[i].f32 * INT32_MAX );
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 4 );
-                }
-                fwrite( &sample, 1, 4, wav_handle->wav_file );
-            }
-            break;
-        case S64:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.i64 = (int64_t)( samples[i].f32 * INT64_MAX );
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 8 );
-                }
-                fwrite( &sample, 1, 8, wav_handle->wav_file );
-            }
-            break;
-
-        case U8:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.u8 = (uint8_t)( (0.5*samples[i].f32 + 0.5) * UINT8_MAX );
-                fwrite( &sample, 1, 1, wav_handle->wav_file );
-            }
-            break;
-
-        case F32:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample = samples[i];
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 4 );
-                }
-                fwrite( &sample, 1, 4, wav_handle->wav_file );
-            }
-            break;
-        case F64:
-            for ( int i = 0; i < n_samples; i++ ) {
-                sample.f64 = (double) samples[i].f32;
-                if ( !wav_handle->little_endian ) {
-                    _switch_endianness( &sample, 8 );
-                }
-                fwrite( &sample, 1, 8, wav_handle->wav_file );
-            }
-            break;
-    }
-
-    wav_handle->n_samples_written += n_samples;
-} /* wavwriter_write_samples_from_float() */
 
 /*-----------------------------------------------------------------*/
 
