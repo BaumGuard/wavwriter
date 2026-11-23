@@ -122,6 +122,10 @@ void wavwriter_write_samples( wav_file_t* wav_handle, void* samples, int n_sampl
 /*-----------------------------------------------------------------*/
 
 void wavwriter_close( wav_file_t* wav_handle ) {
+    if( wav_handle == NULL ) {
+        return;
+    }
+
     uint32_t file_size =
         wav_handle->n_samples_written *
         wav_handle->bytes_per_sample
